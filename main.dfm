@@ -2,7 +2,7 @@ object Form1: TForm1
   Left = 0
   Top = 0
   BorderStyle = bsToolWindow
-  Caption = 'BSA extractor for TES 3,4,5 by Cynic'
+  Caption = 'BSA extractor for TES 3,4,5 by Cynic v 1.1'
   ClientHeight = 377
   ClientWidth = 664
   Color = clBtnFace
@@ -57,8 +57,6 @@ object Form1: TForm1
       item
         Width = 50
       end>
-    ExplicitTop = 344
-    ExplicitWidth = 654
   end
   object TestTree: TTreeView
     Left = 8
@@ -72,7 +70,7 @@ object Form1: TForm1
     OnMouseDown = TestTreeMouseDown
   end
   object FileDlg: TOpenDialog
-    Filter = 'Morrowind|*.bsa|Oblivion|*.bsa|Skyrim|*.bsa'
+    Filter = 'Morrowind,Oblivion,Skyrim,Fallout 3|*.bsa'
     Left = 112
     Top = 88
   end
@@ -115,7 +113,7 @@ object Form1: TForm1
       OnClick = ExtractDirectory1Click
     end
     object ExctractAll1: TMenuItem
-      Caption = 'Exctract All'
+      Caption = 'Extract All'
       OnClick = Extractall1Click
     end
   end

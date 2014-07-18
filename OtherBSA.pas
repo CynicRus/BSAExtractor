@@ -249,8 +249,6 @@ begin
  OpenFile:=TFileStream.Create(ArchiveName,fmShareDenyRead);
  try
    OpenFile.Read(FHeader,SizeOf(TBSAHeader));
-   if (FHeader.version <> 103) and (FHeader.version <> 104) then
-    raise Exception.Create(ErrIncorrectBSAVersion);
    UpdateFunction(ArchiveName,FHeader.fileCount);
    SetMaxProgressFunction(FHeader.folderCount);
    SetLength(Folders, FHeader.folderCount);

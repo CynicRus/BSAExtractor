@@ -35,8 +35,10 @@ type
     procedure FormDestroy(Sender: TObject);
     procedure FormCreate(Sender: TObject);
   private
+    procedure WMDROPFILES(var msg : TWMDropFiles) ; message WM_DROPFILES;
     { Private declarations }
   public
+    function CheckType(const Filename: string): TBSAType;
     Procedure UpdateStatusBar(ArchName: string;FilesCount: integer);
     Procedure ProcessedFiles(Processed,Total: integer);
     Procedure AddToListView(Filename: string;Offset,Size,Idx: integer);
@@ -60,7 +62,7 @@ var
  // CurrIndex: integer;
 implementation
  uses
-  MorrowindBSA,OtherBSA,FileCtrl;
+  MorrowindBSA,OtherBSA,FileCtrl,ShellApi;
 
 {$R *.dfm}
 
@@ -99,6 +101,39 @@ begin
     Data:=TObject(Idx);
   end;
  ListView1.Items.EndUpdate;
+
+end;
+
+function TForm1.CheckType(const Filename: string): TBSAType;
+var
+ FileReader: TFileStream;
+ FieldID: Cardinal;
+ ext: string;
+ Ver: integer;
+begin
+ Ext:=ExtractFileExt(Filename);
+ Ver:=0;
+ if CompareText(LowerCase(Ext),'.bsa') > 0 then
+  raise Exception.Create(ErrNotSupported);
+ FieldID:=0;
+ FileReader:=TFileStream.Create(Filename,fmShareDenyRead);
+ Result:=bsaUnknown;
+ try
+   FileReader.Read(FieldID,4);
+   if (FieldID = 256) then
+    Result:=bsaMorrowind else
+   if (FieldID = 4281154) then
+    begin
+      FileReader.Read(Ver,4);
+      if (ver <> 103) and (ver <> 104) then
+        raise Exception.Create(ErrIncorrectBSAVersion);
+      Result:=bsaOther;
+    end else
+    raise Exception.Create(ErrIncorrectBSAVersion);
+
+ finally
+   FileReader.Free;
+ end;
 
 end;
 
@@ -142,7 +177,7 @@ begin
       raise Exception.Create(ErrPathNotSelected);
 
   if Extractor.ExtractAllFiles then
-   ShowMessage('Successfuly completed!') else
+   ShowMessage(' Successfully completed!') else
    raise Exception.Create(ErrExtractionFile);
 end;
 
@@ -172,7 +207,7 @@ begin
       raise Exception.Create(ErrPathNotSelected);
 
   if Extractor.ExtractDirectory(DirName) then
-   ShowMessage('Successfuly completed!') else
+   ShowMessage('Successfully completed!') else
    raise Exception.Create(ErrExtractionFile);
 
  //ShowMessage(TestTree.Selected.Text);
@@ -294,6 +329,7 @@ begin
  lbl.Left   := (ProgressBar.Width - lbl.Width) div 2;
  lbl.Top    := 2;
  lbl.Transparent := True;
+ DragAcceptFiles(Self.Handle, True);
 
 end;
 
@@ -317,9 +353,10 @@ begin
   Extractor.Free;
  if FileDlg.Execute then
  begin
-  case FileDlg.FilterIndex of
-    1:Extractor:=TMorrowindWorker.Create;
-    2,3:Extractor:=TBSAWorker.Create;
+  case CheckType(FileDlg.Filename) of
+    bsaMorrowind:Extractor:=TMorrowindWorker.Create;
+    bsaOther:Extractor:=TBSAWorker.Create;
+    bsaUnknown: raise Exception.Create(ErrIncorrectBSAVersion);
   end;
    with Extractor do
     begin
@@ -402,5 +439,44 @@ begin
   end;
 
 end;
+
+procedure TForm1.WMDROPFILES(var msg: TWMDropFiles);
+const
+   MAXFILENAME = 255;
+ var
+   fileCount : integer;
+   fileName : array [0..MAXFILENAME] of char;
+ begin
+   fileCount := DragQueryFile(msg.Drop, $FFFFFFFF, fileName, MAXFILENAME) ;
+
+   if fileCount > 1 then
+    raise Exception.Create(ErrCannotDragMoreThanOne);
+
+   DragQueryFile(msg.Drop, 0, fileName, MAXFILENAME) ;
+
+   if (Extractor<> nil) then
+    Extractor.Free;
+
+  case CheckType(Filename) of
+    bsaMorrowind:Extractor:=TMorrowindWorker.Create;
+    bsaOther:Extractor:=TBSAWorker.Create;
+    bsaUnknown: raise Exception.Create(ErrIncorrectBSAVersion);
+  end;
+   with Extractor do
+    begin
+      UpdateFunction:=UpdateStatusBar;
+      ProcessFileFunction:=ProcessedFiles;
+      UpdateListFunction:=AddToListView;
+      SetMaxProgressFunction:=SetMaxProgress;
+      ZeroProgressFunction:=ClearProgress;
+      CurrentProgressFunction:=NextStep;
+      OpenArchive(Filename);
+    end;
+   if (Extractor is TBSAWorker) then
+   FillTreeViewWithFiles(TestTree,TBSAWorker(Extractor).Files) else
+   FillTreeViewWithFiles(TestTree,TMorrowindWorker(Extractor).Files);
+
+   DragFinish(msg.Drop) ;
+ end;
 
 end.

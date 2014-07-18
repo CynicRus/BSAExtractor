@@ -7,8 +7,10 @@ uses
    ErrExtractionFile = 'Extraction file error!';
    ErrNotSelectedFile = 'We dont have the selected file!';
    ErrPathNotSelected = 'Path not selected!';
+   ErrNotSupported = 'This file type is not supported!';
+   ErrCannotDragMoreThanOne = 'You drag more than one file. Operation unsupported!';
   type
-   TBSAType = (bsaMorrowind = 0,bsaOblivion = 1,bsaSkyrim = 2);
+   TBSAType = (bsaUnknown = -1,bsaMorrowind = 0,bsaOther = 1);
    TUpdateFunction = procedure (ArchName: string;FilesCount: integer) of object;
    TProcessFileFunction = procedure (Processed,Total: integer) of object;
    TUpdateListFunction = procedure (Filename: string;Offset,Size,Index: integer) of object;
