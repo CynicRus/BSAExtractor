@@ -3,8 +3,9 @@ unit main;
 interface
 
 uses
-  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs,Zlib,AbstractBSAWorker, Vcl.StdCtrls,
+  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants,
+  System.Classes, Vcl.Graphics,
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Zlib, AbstractBSAWorker, Vcl.StdCtrls,
   Vcl.ComCtrls, Vcl.Menus;
 
 type
@@ -35,202 +36,209 @@ type
     procedure FormDestroy(Sender: TObject);
     procedure FormCreate(Sender: TObject);
   private
-    procedure WMDROPFILES(var msg : TWMDropFiles) ; message WM_DROPFILES;
+    procedure WMDROPFILES(var msg: TWMDropFiles); message WM_DROPFILES;
     { Private declarations }
   public
     function CheckType(const Filename: string): TBSAType;
-    Procedure UpdateStatusBar(ArchName: string;FilesCount: integer);
-    Procedure ProcessedFiles(Processed,Total: integer);
-    Procedure AddToListView(Filename: string;Offset,Size,Idx: integer);
-    procedure SetMaxProgress(MaxP: integer);
+    Procedure UpdateStatusBar(ArchName: string; FilesCount: Integer);
+    Procedure ProcessedFiles(Processed, Total: Integer);
+    Procedure AddToListView(Filename: string; Offset, Size, Idx: Integer);
+    procedure SetMaxProgress(MaxP: Integer);
     procedure ClearProgress();
-    procedure NextStep(StepPos: integer; Text: string);
-    procedure FillTreeViewWithFiles(TreeView1 : TTreeView; Strs : TAbstractFileList);
+    procedure NextStep(StepPos: Integer; Text: string);
+    procedure FillTreeViewWithFiles(TreeView1: TTreeView;
+      Strs: TAbstractFileList);
     { Public declarations }
   end;
-
-
-
-
-
 
 var
   Form1: TForm1;
   Extractor: TAbstractBSAWorker = nil;
   ProgressBar: TProgressBar = nil;
   lbl: TLabel = nil;
- // CurrIndex: integer;
+
+  // CurrIndex: integer;
 implementation
- uses
-  MorrowindBSA,OtherBSA,FileCtrl,ShellApi;
+
+uses
+  MorrowindBSA, OtherBSA, FileCtrl, ShellApi;
 
 {$R *.dfm}
 
+procedure TForm1.AddToListView(Filename: string; Offset, Size, Idx: Integer);
 
-procedure TForm1.AddToListView(Filename: string; Offset, Size,Idx: integer);
-
-function FormatByteSize(const bytes: Longint): string;
- const
-   B = 1; //byte
-   KB = 1024 * B; //kilobyte
-   MB = 1024 * KB; //megabyte
-   GB = 1024 * MB; //gigabyte
- begin
-   if bytes > GB then
-     result := FormatFloat('#.## GB', bytes / GB)
-   else
-     if bytes > MB then
-       result := FormatFloat('#.## MB', bytes / MB)
-     else
-       if bytes > KB then
-         result := FormatFloat('#.## KB', bytes / KB)
-       else
-         result := FormatFloat('#.## bytes', bytes) ;
- end;
+  function FormatByteSize(const bytes: Longint): string;
+  const
+    B = 1; // byte
+    KB = 1024 * B; // kilobyte
+    MB = 1024 * KB; // megabyte
+    GB = 1024 * MB; // gigabyte
+  begin
+    if bytes > GB then
+      result := FormatFloat('#.## GB', bytes / GB)
+    else if bytes > MB then
+      result := FormatFloat('#.## MB', bytes / MB)
+    else if bytes > KB then
+      result := FormatFloat('#.## KB', bytes / KB)
+    else
+      result := FormatFloat('#.## bytes', bytes);
+  end;
 
 var
- ListItem: TListItem;
+  ListItem: TListItem;
 begin
- ListItem:=ListView1.Items.Add;
- ListView1.Items.BeginUpdate;
- With ListItem do
+  ListItem := ListView1.Items.Add;
+  ListView1.Items.BeginUpdate;
+  With ListItem do
   begin
-    Caption:=Filename;
+    Caption := Filename;
     Subitems.Add(FormatByteSize(Size));
-    Subitems.Add(IntToHex(Offset,8));
-    Data:=TObject(Idx);
+    Subitems.Add(IntToHex(Offset, 8));
+    Data := TObject(Idx);
   end;
- ListView1.Items.EndUpdate;
+  ListView1.Items.EndUpdate;
 
 end;
 
 function TForm1.CheckType(const Filename: string): TBSAType;
 var
- FileReader: TFileStream;
- FieldID: Cardinal;
- ext: string;
- Ver: integer;
+  FileReader: TFileStream;
+  FieldID: Cardinal;
+  ext: string;
+  Ver: Integer;
 begin
- Ext:=ExtractFileExt(Filename);
- Ver:=0;
- if CompareText(LowerCase(Ext),'.bsa') > 0 then
-  raise Exception.Create(ErrNotSupported);
- FieldID:=0;
- FileReader:=TFileStream.Create(Filename,fmShareDenyRead);
- Result:=bsaUnknown;
- try
-   FileReader.Read(FieldID,4);
-   if (FieldID = 256) then
-    Result:=bsaMorrowind else
-   if (FieldID = 4281154) then
+  ext := ExtractFileExt(Filename);
+  Ver := 0;
+  if CompareText(LowerCase(ext), '.bsa') > 0 then
+    raise Exception.Create(ErrNotSupported);
+  FieldID := 0;
+  FileReader := TFileStream.Create(Filename, fmShareDenyRead);
+  result := bsaUnknown;
+  try
+    FileReader.Read(FieldID, 4);
+    if (FieldID = 256) then
+      result := bsaMorrowind
+    else if (FieldID = 4281154) then
     begin
-      FileReader.Read(Ver,4);
-      if (ver <> 103) and (ver <> 104) then
+      FileReader.Read(Ver, 4);
+      if (Ver <> 103) and (Ver <> 104) then
         raise Exception.Create(ErrIncorrectBSAVersion);
-      Result:=bsaOther;
-    end else
-    raise Exception.Create(ErrIncorrectBSAVersion);
-
- finally
-   FileReader.Free;
- end;
-
+      case Ver of
+        103:
+          result := bsaOblivion;
+        104:
+          result := bsaSkyrim;
+      end;
+    end
+    else
+      raise Exception.Create(ErrIncorrectBSAVersion);
+  finally
+    FileReader.Free;
+  end;
 end;
 
 procedure TForm1.ClearProgress;
 begin
- ProgressBar.Position:=0;
- lbl.Caption:='';
+  ProgressBar.Position := 0;
+  lbl.Caption := '';
 end;
 
 procedure TForm1.Exit1Click(Sender: TObject);
 begin
- Application.Destroy;
+  Application.Destroy;
 end;
 
 procedure TForm1.Extract1Click(Sender: TObject);
 var
- Dir: string;
+  Dir: string;
 begin
- if SelectDirectory('Select Directory' ,ExtractFileDrive(Dir), Dir,
-             [sdNewUI, sdNewFolder] )then
-      Extractor.ExtractionPath:=dir else
-      raise Exception.Create(ErrPathNotSelected);
+  if SelectDirectory('Select Directory', ExtractFileDrive(Dir), Dir,
+    [sdNewUI, sdNewFolder]) then
+    Extractor.ExtractionPath := Dir
+  else
+    raise Exception.Create(ErrPathNotSelected);
 
- if (ListView1.ItemIndex < 0) then
-  raise Exception.Create(ErrNotSelectedFile);
+  if (ListView1.ItemIndex < 0) then
+    raise Exception.Create(ErrNotSelectedFile);
 
- if Extractor.ExtractFile(Integer(ListView1.Items[ListView1.ItemIndex].Data)) then
-  ShowMessage('Successfully completed!') else
-  raise Exception.Create(ErrExtractionFile);
+  if Extractor.ExtractFile(Integer(ListView1.Items[ListView1.ItemIndex].Data))
+  then
+    ShowMessage('Successfully completed!')
+  else
+    raise Exception.Create(ErrExtractionFile);
 end;
 
 procedure TForm1.Extractall1Click(Sender: TObject);
 var
- Dir: string;
+  Dir: string;
 begin
- if TestTree.Items.Count <= 0 then
-  exit;
- if SelectDirectory('Select Directory' ,ExtractFileDrive(Dir), Dir,
-             [sdNewUI, sdNewFolder] )then
-      Extractor.ExtractionPath:=dir else
-      raise Exception.Create(ErrPathNotSelected);
+  if TestTree.Items.Count <= 0 then
+    exit;
+  if SelectDirectory('Select Directory', ExtractFileDrive(Dir), Dir,
+    [sdNewUI, sdNewFolder]) then
+    Extractor.ExtractionPath := Dir
+  else
+    raise Exception.Create(ErrPathNotSelected);
 
   if Extractor.ExtractAllFiles then
-   ShowMessage(' Successfully completed!') else
-   raise Exception.Create(ErrExtractionFile);
+    ShowMessage(' Successfully completed!')
+  else
+    raise Exception.Create(ErrExtractionFile);
 end;
 
 procedure TForm1.ExtractDirectory1Click(Sender: TObject);
 var
- TreeNode: TTreeNode;
- DirName,Dir: string;
+  TreeNode: TTreeNode;
+  DirName, Dir: string;
 begin
- DirName:='';
- if (TestTree.Selected = nil) then
-  exit;
-  TreeNode:=TestTree.Selected;
+  DirName := '';
+  if (TestTree.Selected = nil) then
+    exit;
+  TreeNode := TestTree.Selected;
 
   if TreeNode.Parent <> nil then
-       begin
-        while TreeNode <> nil do
-         begin
-           DirName:=TreeNode.Text+'\'+DirName;
-           TreeNode:= TreeNode.Parent;
-         end
-       end else
-        DirName:=TreeNode.Text + '\';
+  begin
+    while TreeNode <> nil do
+    begin
+      DirName := TreeNode.Text + '\' + DirName;
+      TreeNode := TreeNode.Parent;
+    end
+  end
+  else
+    DirName := TreeNode.Text + '\';
 
-   if SelectDirectory('Select Directory' ,ExtractFileDrive(Dir), Dir,
-             [sdNewUI, sdNewFolder] )then
-      Extractor.ExtractionPath:=dir else
-      raise Exception.Create(ErrPathNotSelected);
+  if SelectDirectory('Select Directory', ExtractFileDrive(Dir), Dir,
+    [sdNewUI, sdNewFolder]) then
+    Extractor.ExtractionPath := Dir
+  else
+    raise Exception.Create(ErrPathNotSelected);
 
   if Extractor.ExtractDirectory(DirName) then
-   ShowMessage('Successfully completed!') else
-   raise Exception.Create(ErrExtractionFile);
+    ShowMessage('Successfully completed!')
+  else
+    raise Exception.Create(ErrExtractionFile);
 
- //ShowMessage(TestTree.Selected.Text);
- //Extractor.
+  // ShowMessage(TestTree.Selected.Text);
+  // Extractor.
 end;
 
 procedure TForm1.FillTreeViewWithFiles(TreeView1: TTreeView;
   Strs: TAbstractFileList);
 Var
-  CachedStrs: TStringList; 
+  CachedStrs: TStringList;
 
   Procedure AddItem(Lev: Integer; ParentNode: TTreeNode; S: String);
     Function FindNodeWithText(AParent: TTreeNode; Const S: String): TTreeNode;
     Var
-      K : Integer;
-      fStr : String;
+      K: Integer;
+      fStr: String;
       tmpNode: TTreeNode;
     Begin
-      Result := Nil;
+      result := Nil;
       fStr := S + IntToStr(Integer(AParent));
       K := CachedStrs.IndexOf(fStr);
       If K > -1 Then
-        Result := Pointer(CachedStrs.Objects[K])
+        result := Pointer(CachedStrs.Objects[K])
       Else
       Begin
         If AParent <> Nil Then
@@ -241,7 +249,7 @@ Var
         Begin
           If tmpNode.Text = S Then
           Begin
-            Result := tmpNode;
+            result := tmpNode;
             CachedStrs.AddObject(fStr, Pointer(tmpNode));
             break;
           End;
@@ -252,10 +260,11 @@ Var
 
   Var
     prefix: String;
-    ID : Integer;
-    aNode : TTreeNode;
+    ID: Integer;
+    aNode: TTreeNode;
   Begin
-    If S = '' Then Exit;
+    If S = '' Then
+      exit;
     ID := Pos('\', S);
     prefix := '';
     If ID > 0 Then
@@ -277,8 +286,8 @@ Var
 
   End;
 
-
-Var K: Integer;
+Var
+  K: Integer;
 Begin
 
   CachedStrs := TStringList.Create;
@@ -299,184 +308,208 @@ Begin
   End;
 End;
 
-function CreateProgressBar(StatusBar: TStatusBar; index: integer): TProgressBar;
+function CreateProgressBar(StatusBar: TStatusBar; index: Integer): TProgressBar;
 var
-  FindLeft: integer;
-  i: integer;
+  FindLeft: Integer;
+  i: Integer;
 begin
-  result := TProgressBar.create(Statusbar);
-  with Result do
+  result := TProgressBar.Create(StatusBar);
+  with result do
   begin
-    parent := Statusbar;
-    visible := true;
+    Parent := StatusBar;
+    visible := True;
     top := 2;
     FindLeft := 0;
     for i := 0 to index - 1 do
-      FindLeft := FindLeft + Statusbar.Panels[i].width + 1;
+      FindLeft := FindLeft + StatusBar.Panels[i].width + 1;
     left := FindLeft + 160;
-    width := Statusbar.Panels[index].width + 100;
-    height := Statusbar.height - 2;
+    width := StatusBar.Panels[index].width + 100;
+    height := StatusBar.height - 2;
   end;
 end;
 
-
 procedure TForm1.FormCreate(Sender: TObject);
 begin
- ProgressBar:=CreateProgressBar(StatusBar1,2);
- ProgressBar.Min:=0;
- lbl:=TLabel.Create(nil);
- lbl.Parent := ProgressBar;
- lbl.Left   := (ProgressBar.Width - lbl.Width) div 2;
- lbl.Top    := 2;
- lbl.Transparent := True;
- DragAcceptFiles(Self.Handle, True);
+  ProgressBar := CreateProgressBar(StatusBar1, 2);
+  ProgressBar.Min := 0;
+  lbl := TLabel.Create(nil);
+  lbl.Parent := ProgressBar;
+  lbl.left := (ProgressBar.width - lbl.width) div 2;
+  lbl.top := 2;
+  lbl.Transparent := True;
+  DragAcceptFiles(Self.Handle, True);
 
 end;
 
 procedure TForm1.FormDestroy(Sender: TObject);
 begin
- if (Extractor <> nil) then
-  Extractor.Free;
- if (lbl <> nil) then
-  lbl.Free;
- if (ProgressBar <> nil) then
-  ProgressBar.Free;
+  if (Extractor <> nil) then
+    Extractor.Free;
+  if (lbl <> nil) then
+    lbl.Free;
+  if (ProgressBar <> nil) then
+    ProgressBar.Free;
 end;
 
 procedure TForm1.N2Click(Sender: TObject);
 var
- i: Integer;
+  i: Integer;
 begin
- //CurrIndex:=-1;
- ListView1.Items.Clear;
- if (Extractor <> nil) then
-  Extractor.Free;
- if FileDlg.Execute then
- begin
-  case CheckType(FileDlg.Filename) of
-    bsaMorrowind:Extractor:=TMorrowindWorker.Create;
-    bsaOther:Extractor:=TBSAWorker.Create;
-    bsaUnknown: raise Exception.Create(ErrIncorrectBSAVersion);
-  end;
-   with Extractor do
-    begin
-      UpdateFunction:=UpdateStatusBar;
-      ProcessFileFunction:=ProcessedFiles;
-      UpdateListFunction:=AddToListView;
-      SetMaxProgressFunction:=SetMaxProgress;
-      ZeroProgressFunction:=ClearProgress;
-      CurrentProgressFunction:=NextStep;
-      OpenArchive(FileDlg.Filename);
-    end;
-   if (Extractor is TBSAWorker) then
-   FillTreeViewWithFiles(TestTree,TBSAWorker(Extractor).Files) else
-   FillTreeViewWithFiles(TestTree,TMorrowindWorker(Extractor).Files);
+  TestTree.Items.BeginUpdate;
+  TestTree.Items.Clear;
+  TestTree.Items.EndUpdate;
 
-  end else exit;
+  ListView1.Items.BeginUpdate;
+  ListView1.Items.Clear;
+  ListView1.Items.EndUpdate;
+  if (Extractor <> nil) then
+    Extractor.Free;
+  if FileDlg.Execute then
+  begin
+    case CheckType(FileDlg.Filename) of
+      bsaMorrowind:
+        Extractor := TMorrowindWorker.Create;
+      bsaSkyrim, BsaFallout3, bsaOblivion:
+        Extractor := TBSAWorker.Create;
+      bsaUnknown:
+        raise Exception.Create(ErrIncorrectBSAVersion);
+    end;
+    with Extractor do
+    begin
+      UpdateFunction := UpdateStatusBar;
+      ProcessFileFunction := ProcessedFiles;
+      UpdateListFunction := AddToListView;
+      SetMaxProgressFunction := SetMaxProgress;
+      ZeroProgressFunction := ClearProgress;
+      CurrentProgressFunction := NextStep;
+      OpenArchive(FileDlg.Filename);
+      //SaveFilesToArchive(ExtractFilePath(FileDlg.Filename) + 'test.bsa');
+    end;
+    if (Extractor is TBSAWorker) then
+      FillTreeViewWithFiles(TestTree, TBSAWorker(Extractor).Files)
+    else
+      FillTreeViewWithFiles(TestTree, TMorrowindWorker(Extractor).Files);
+
+  end
+  else
+    exit;
+
 end;
 
-procedure TForm1.NextStep(StepPos: integer; Text: string);
+procedure TForm1.NextStep(StepPos: Integer; Text: string);
 begin
   ProgressBar.Position := ProgressBar.Position + StepPos;
-  lbl.Caption:=Format('%d/%d', [ProgressBar.Position,ProgressBar.Max]);
+  lbl.Caption := Format('%d/%d', [ProgressBar.Position, ProgressBar.Max]);
   with StatusBar1.Panels do
   begin
-    Items[2].Text:=Text;
+    Items[2].Text := Text;
   end;
 
 end;
 
-procedure TForm1.ProcessedFiles(Processed, Total: integer);
+procedure TForm1.ProcessedFiles(Processed, Total: Integer);
 begin
- with StatusBar1.Panels do
+  with StatusBar1.Panels do
   begin
-    Items[4].Text:=IntToStr(Processed)+'/'+IntToStr(Total);
+    Items[4].Text := IntToStr(Processed) + '/' + IntToStr(Total);
   end;
 end;
 
-procedure TForm1.SetMaxProgress(MaxP: integer);
+procedure TForm1.SetMaxProgress(MaxP: Integer);
 begin
- ProgressBar.Max:=MaxP;
+  ProgressBar.Max := MaxP;
 end;
 
 procedure TForm1.TestTreeChange(Sender: TObject; Node: TTreeNode);
 var
- TreeNode: TTreeNode;
- DirName: string;
+  TreeNode: TTreeNode;
+  DirName: string;
 begin
   if Assigned(Node) then
-   begin
-     ListView1.Clear;
-     TreeNode:=Node;
-     DirName:='';
-     if TreeNode.Parent <> nil then
-       begin
-        while TreeNode <> nil do
-         begin
-           DirName:=TreeNode.Text+'\'+DirName;
-           TreeNode:= TreeNode.Parent;
-         end
-       end else
-        DirName:=TreeNode.Text + '\';
-     Extractor.DrawFilesByDirectory(DirName);
-   end;
+  begin
+    ListView1.Clear;
+    TreeNode := Node;
+    DirName := '';
+    if TreeNode.Parent <> nil then
+    begin
+      while TreeNode <> nil do
+      begin
+        DirName := TreeNode.Text + '\' + DirName;
+        TreeNode := TreeNode.Parent;
+      end
+    end
+    else
+      DirName := TreeNode.Text + '\';
+    Extractor.DrawFilesByDirectory(DirName);
+  end;
 end;
 
 procedure TForm1.TestTreeMouseDown(Sender: TObject; Button: TMouseButton;
   Shift: TShiftState; X, Y: Integer);
 begin
- if Button = mbRight then
-  TestTree.Selected := TestTree.GetNodeAt(X, Y);
+  if Button = mbRight then
+    TestTree.Selected := TestTree.GetNodeAt(X, Y);
 
 end;
 
-procedure TForm1.UpdateStatusBar(ArchName: string; FilesCount: integer);
+procedure TForm1.UpdateStatusBar(ArchName: string; FilesCount: Integer);
 begin
- with StatusBar1.Panels do
+  with StatusBar1.Panels do
   begin
-    Items[0].Text:=ExtractFileName(ArchName);
-    Items[1].Text:=IntToStr(FilesCount);
+    Items[0].Text := ExtractFileName(ArchName);
+    Items[1].Text := IntToStr(FilesCount);
   end;
 
 end;
 
 procedure TForm1.WMDROPFILES(var msg: TWMDropFiles);
 const
-   MAXFILENAME = 255;
- var
-   fileCount : integer;
-   fileName : array [0..MAXFILENAME] of char;
- begin
-   fileCount := DragQueryFile(msg.Drop, $FFFFFFFF, fileName, MAXFILENAME) ;
+  MAXFILENAME = 255;
+var
+  fileCount: Integer;
+  Filename: array [0 .. MAXFILENAME] of char;
+begin
+  fileCount := DragQueryFile(msg.Drop, $FFFFFFFF, Filename, MAXFILENAME);
 
-   if fileCount > 1 then
+  if fileCount > 1 then
     raise Exception.Create(ErrCannotDragMoreThanOne);
 
-   DragQueryFile(msg.Drop, 0, fileName, MAXFILENAME) ;
+  DragQueryFile(msg.Drop, 0, Filename, MAXFILENAME);
 
-   if (Extractor<> nil) then
+  if (Extractor <> nil) then
     Extractor.Free;
 
-  case CheckType(Filename) of
-    bsaMorrowind:Extractor:=TMorrowindWorker.Create;
-    bsaOther:Extractor:=TBSAWorker.Create;
-    bsaUnknown: raise Exception.Create(ErrIncorrectBSAVersion);
-  end;
-   with Extractor do
-    begin
-      UpdateFunction:=UpdateStatusBar;
-      ProcessFileFunction:=ProcessedFiles;
-      UpdateListFunction:=AddToListView;
-      SetMaxProgressFunction:=SetMaxProgress;
-      ZeroProgressFunction:=ClearProgress;
-      CurrentProgressFunction:=NextStep;
-      OpenArchive(Filename);
-    end;
-   if (Extractor is TBSAWorker) then
-   FillTreeViewWithFiles(TestTree,TBSAWorker(Extractor).Files) else
-   FillTreeViewWithFiles(TestTree,TMorrowindWorker(Extractor).Files);
+  TestTree.Items.BeginUpdate;
+  TestTree.Items.Clear;
+  TestTree.Items.EndUpdate;
 
-   DragFinish(msg.Drop) ;
- end;
+  ListView1.Items.BeginUpdate;
+  ListView1.Items.Clear;
+  ListView1.Items.EndUpdate;
+
+  case CheckType(Filename) of
+    bsaMorrowind:
+      Extractor := TMorrowindWorker.Create;
+    BsaFallout3, bsaOblivion, bsaSkyrim:
+      Extractor := TBSAWorker.Create;
+    bsaUnknown:
+      raise Exception.Create(ErrIncorrectBSAVersion);
+  end;
+  with Extractor do
+  begin
+    UpdateFunction := UpdateStatusBar;
+    ProcessFileFunction := ProcessedFiles;
+    UpdateListFunction := AddToListView;
+    SetMaxProgressFunction := SetMaxProgress;
+    ZeroProgressFunction := ClearProgress;
+    CurrentProgressFunction := NextStep;
+    OpenArchive(Filename);
+  end;
+  if (Extractor is TBSAWorker) then
+    FillTreeViewWithFiles(TestTree, TBSAWorker(Extractor).Files)
+  else
+    FillTreeViewWithFiles(TestTree, TMorrowindWorker(Extractor).Files);
+  DragFinish(msg.Drop);
+end;
 
 end.
